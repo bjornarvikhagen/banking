@@ -63,9 +63,12 @@ export class BankingClient {
   #clean = (acct: string): string => acct.replaceAll(/\s/g, "");
 
   getBalance = (account: string): Promise<number> =>
-    this.#api<{ accountBalance: number }>("/personal/banking/accounts/balance", {
-      accountNumber: this.#clean(account),
-    }).then((response) => response.accountBalance);
+    this.#api<{ accountBalance: number }>(
+      "/personal/banking/accounts/balance",
+      {
+        accountNumber: this.#clean(account),
+      }
+    ).then((response) => response.accountBalance);
 
   transfer = (req: TransferRequest): Promise<TransferResult> =>
     this.#api<TransferResult>("/personal/banking/transfer/debit", {

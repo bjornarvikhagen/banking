@@ -1,0 +1,11 @@
+services:
+  banking:
+    build: .
+    image: banking:latest
+    container_name: banking-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    command: ["bun", "run", "src/index.ts", "schedule"]

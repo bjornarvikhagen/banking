@@ -71,18 +71,25 @@ async function runTransfer(client: BankingClient): Promise<void> {
 }
 
 const schedule = (client: BankingClient): void => {
+  const ms = msUntilHour(CONFIG.runHour);
+  const nextRun = new Date(Date.now() + ms);
+  const hours = (ms / 1000 / 60 / 60).toFixed(1);
+  console.log(
+    `Next transfer scheduled for ${nextRun.toISOString()} (in ${hours}h)`
+  );
   setTimeout(async () => {
     await runTransfer(client).catch((error) =>
       console.error(`Failed: ${error}`)
     );
     schedule(client);
-  }, msUntilHour(CONFIG.runHour));
+  }, ms);
 };
 
 const [_executable, _script, mode] = process.argv;
 if (mode === "once") {
   await runTransfer(await createClient());
 } else if (mode === "schedule") {
+  console.log("Scheduler started");
   schedule(await createClient());
 } else {
   console.log("Usage: bun src/index.ts [once|schedule]");
