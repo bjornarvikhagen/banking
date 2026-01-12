@@ -2,16 +2,19 @@ import { OAuthClient } from "./oauth-client";
 
 const CONTENT_TYPE = "application/vnd.sparebank1.v1+json; charset=utf-8";
 
-type TransferRequest = {
+interface TransferRequest {
   fromAccount: string;
   toAccount: string;
   amount: string;
   message: string;
   currencyCode?: string;
   dueDate?: string;
-};
+}
 
-type TransferResult = { paymentId: string; warnings?: string[] };
+interface TransferResult {
+  paymentId: string;
+  warnings?: string[];
+}
 
 export class BankingClient {
   private oauth: OAuthClient;
@@ -28,10 +31,11 @@ export class BankingClient {
     this.oauth = new OAuthClient(cfg, tokenPath);
   }
 
-  initializeTokens = (...args: Parameters<OAuthClient["initializeTokens"]>) =>
-    this.oauth.initializeTokens(...args);
+  initializeTokens = (
+    ...args: Parameters<OAuthClient["initializeTokens"]>
+  ): Promise<void> => this.oauth.initializeTokens(...args);
 
-  hasTokens = () => this.oauth.hasTokens();
+  hasTokens = (): Promise<boolean> => this.oauth.hasTokens();
 
   private async api<T>(path: string, body: object): Promise<T> {
     const res = await this.oauth.fetch(`${this.cfg.apiBase}${path}`, {
@@ -49,14 +53,14 @@ export class BankingClient {
     return json as T;
   }
 
-  private clean = (acct: string) => acct.replace(/\s/g, "");
+  private clean = (acct: string): string => acct.replaceAll(/\s/g, "");
 
-  getBalance = (account: string) =>
+  getBalance = (account: string): Promise<number> =>
     this.api<{ accountBalance: number }>("/personal/banking/accounts/balance", {
       accountNumber: this.clean(account),
-    }).then((r) => r.accountBalance);
+    }).then((response) => response.accountBalance);
 
-  transfer = (req: TransferRequest) =>
+  transfer = (req: TransferRequest): Promise<TransferResult> =>
     this.api<TransferResult>("/personal/banking/transfer/debit", {
       ...req,
       fromAccount: this.clean(req.fromAccount),
@@ -67,7 +71,7 @@ export class BankingClient {
     fromAccount: string;
     toAccount: string;
     message: string;
-  }) {
+  }): Promise<{ paymentId: string; amount: number; warnings?: string[] }> {
     const balance = await this.getBalance(cfg.fromAccount);
     const now = new Date();
     const daysLeft =
@@ -76,7 +80,9 @@ export class BankingClient {
       1;
     const amount = balance / daysLeft;
 
-    if (amount <= 0) throw new Error("No funds to transfer");
+    if (amount <= 0) {
+      throw new Error("No funds to transfer");
+    }
 
     const result = await this.transfer({
       ...cfg,

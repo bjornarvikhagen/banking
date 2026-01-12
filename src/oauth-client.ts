@@ -1,16 +1,16 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-type TokenData = {
+interface TokenData {
   access_token: string;
   refresh_token: string;
   expires_at: number;
-};
+}
 
-type OAuthConfig = {
+interface OAuthConfig {
   clientId: string;
   clientSecret: string;
   tokenUrl: string;
-};
+}
 
 export class OAuthClient {
   private refreshPromise: Promise<void> | null = null;
@@ -19,14 +19,18 @@ export class OAuthClient {
 
   private async getTokens(): Promise<TokenData | null> {
     return readFile(this.tokenPath, "utf-8")
-      .then((s) => JSON.parse(s) as TokenData)
+      .then((str) => JSON.parse(str) as TokenData)
       .catch(() => null);
   }
 
-  private saveTokens = (data: TokenData) =>
+  private saveTokens = (data: TokenData): Promise<void> =>
     writeFile(this.tokenPath, JSON.stringify(data, null, 2));
 
-  async initializeTokens(access: string, refresh: string, expiresIn: number) {
+  async initializeTokens(
+    access: string,
+    refresh: string,
+    expiresIn: number
+  ): Promise<void> {
     await this.saveTokens({
       access_token: access,
       refresh_token: refresh,
@@ -34,12 +38,14 @@ export class OAuthClient {
     });
   }
 
-  hasTokens = async () => (await this.getTokens()) !== null;
+  hasTokens = async (): Promise<boolean> => (await this.getTokens()) !== null;
 
   async fetch(input: string | URL, init?: RequestInit): Promise<Response> {
-    const doFetch = async () => {
+    const doFetch = async (): Promise<Response> => {
       const tokens = await this.getTokens();
-      if (!tokens) throw new Error("No tokens available");
+      if (!tokens) {
+        throw new Error("No tokens available");
+      }
       const headers = new Headers(init?.headers);
       headers.set("Authorization", `Bearer ${tokens.access_token}`);
       return fetch(input, { ...init, headers });
@@ -54,22 +60,28 @@ export class OAuthClient {
     return res;
   }
 
-  private async ensureFresh() {
+  private async ensureFresh(): Promise<void> {
     const tokens = await this.getTokens();
-    if (!tokens) throw new Error("No tokens in storage");
-    if (tokens.expires_at - Date.now() < 60_000) await this.refresh();
+    if (!tokens) {
+      throw new Error("No tokens in storage");
+    }
+    if (tokens.expires_at - Date.now() < 60_000) {
+      await this.refresh();
+    }
   }
 
-  private async refresh() {
+  private async refresh(): Promise<void> {
     this.refreshPromise ??= this.doRefresh().finally(
       () => (this.refreshPromise = null)
     );
     await this.refreshPromise;
   }
 
-  private async doRefresh() {
+  private async doRefresh(): Promise<void> {
     const tokens = await this.getTokens();
-    if (!tokens) throw new Error("No refresh token");
+    if (!tokens) {
+      throw new Error("No refresh token");
+    }
 
     const res = await fetch(this.config.tokenUrl, {
       method: "POST",
@@ -82,7 +94,9 @@ export class OAuthClient {
       }),
     });
 
-    if (!res.ok) throw new Error(`Token refresh failed: ${res.status}`);
+    if (!res.ok) {
+      throw new Error(`Token refresh failed: ${res.status}`);
+    }
 
     const data = (await res.json()) as {
       access_token: string;

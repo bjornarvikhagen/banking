@@ -1,9 +1,11 @@
 import { BankingClient } from "./banking-client";
 
-const env = <T extends string[]>(...keys: T) => {
-  const vals = keys.map((k) => process.env[k]);
-  const missing = keys.filter((_, i) => !vals[i]);
-  if (missing.length) throw new Error(`Missing env: ${missing.join(", ")}`);
+const env = <T extends string[]>(...keys: T): { [K in keyof T]: string } => {
+  const vals = keys.map((key) => process.env[key]);
+  const missing = keys.filter((_, index) => !vals[index]);
+  if (missing.length > 0) {
+    throw new Error(`Missing env: ${missing.join(", ")}`);
+  }
   return vals as { [K in keyof T]: string };
 };
 
@@ -30,7 +32,7 @@ const CONFIG = {
   runHour: 9,
 } as const;
 
-async function createClient() {
+async function createClient(): Promise<BankingClient> {
   const client = new BankingClient(
     {
       clientId: CLIENT_ID,
@@ -48,29 +50,40 @@ async function createClient() {
   return client;
 }
 
-const msUntilHour = (hour: number) => {
+const msUntilHour = (hour: number): number => {
   const now = Date.now();
   const next = new Date();
-  next.setHours(hour, 0, 0, 0);
-  if (next.getTime() <= now) next.setDate(next.getDate() + 1);
+  next.setHours(hour, 0, 0);
+  if (next.getTime() <= now) {
+    next.setDate(next.getDate() + 1);
+  }
   return next.getTime() - now;
 };
 
-async function runTransfer(client: BankingClient) {
+async function runTransfer(client: BankingClient): Promise<void> {
   const { amount, paymentId, warnings } = await client.executeDailyTransfer(
     CONFIG
   );
   console.log(`Transferred ${amount.toFixed(2)} NOK (${paymentId})`);
-  if (warnings?.length) console.log(`Warnings: ${warnings.join(", ")}`);
+  if (warnings && warnings.length > 0) {
+    console.log(`Warnings: ${warnings.join(", ")}`);
+  }
 }
 
-const schedule = (client: BankingClient) =>
+const schedule = (client: BankingClient): void => {
   setTimeout(async () => {
-    await runTransfer(client).catch((e) => console.error(`Failed: ${e}`));
+    await runTransfer(client).catch((error) =>
+      console.error(`Failed: ${error}`)
+    );
     schedule(client);
   }, msUntilHour(CONFIG.runHour));
+};
 
 const [, , mode] = process.argv;
-if (mode === "once") await runTransfer(await createClient());
-else if (mode === "schedule") schedule(await createClient());
-else console.log("Usage: bun src/index.ts [once|schedule]");
+if (mode === "once") {
+  await runTransfer(await createClient());
+} else if (mode === "schedule") {
+  schedule(await createClient());
+} else {
+  console.log("Usage: bun src/index.ts [once|schedule]");
+}
