@@ -1,74 +1,115 @@
-#!/bin/bash
-# Deploy script: syncs code, rebuilds docker, restarts container
+#!/usr/bin/env bash
+# ultra-deploy.sh — deterministic, loud, and mildly paranoid
 
-set -e
+set -Eeuo pipefail
+IFS=$'\n\t'
 
-# Load deployment config from .deploy.env if it exists
-if [ -f .deploy.env ]; then
-  set -a
-  source .deploy.env
-  set +a
+#######################################
+# Styling
+#######################################
+if [[ -t 1 ]]; then
+  BOLD=$(tput bold)
+  DIM=$(tput dim)
+  RED=$(tput setaf 1)
+  GREEN=$(tput setaf 2)
+  YELLOW=$(tput setaf 3)
+  BLUE=$(tput setaf 4)
+  RESET=$(tput sgr0)
+else
+  BOLD=""; DIM=""; RED=""; GREEN=""; YELLOW=""; BLUE=""; RESET=""
 fi
 
-# VPS connection details (priority: command args > env vars > .deploy.env > error)
-VPS_HOST="${1:-${VPS_HOST}}"
+log()   { echo -e "${BLUE}▸${RESET} $*"; }
+ok()    { echo -e "${GREEN}✓${RESET} $*"; }
+warn()  { echo -e "${YELLOW}⚠${RESET} $*"; }
+die()   { echo -e "${RED}✖${RESET} $*" >&2; exit 1; }
+
+trap 'die "failed at line $LINENO"' ERR
+
+#######################################
+# Load config (.deploy.env)
+#######################################
+if [[ -f .deploy.env ]]; then
+  while IFS='=' read -r k v; do
+    [[ -z "$k" || "$k" =~ ^# ]] && continue
+    case "$k" in
+      VPS_HOST|VPS_PATH) export "$k=$v" ;;
+    esac
+  done < .deploy.env
+fi
+
+#######################################
+# Args > env > defaults
+#######################################
+VPS_HOST="${1:-${VPS_HOST:-}}"
 VPS_PATH="${2:-${VPS_PATH:-~/banking}}"
 
-# Validate VPS_HOST is set
-if [ -z "$VPS_HOST" ]; then
-  echo "❌ Error: VPS_HOST not set"
-  echo ""
-  echo "Create .deploy.env file with:"
-  echo "  VPS_HOST=root@your-vps-ip"
-  echo "  VPS_PATH=~/banking"
-  echo ""
-  echo "Or copy .deploy.env.example:"
-  echo "  cp .deploy.env.example .deploy.env"
-  echo "  # Then edit .deploy.env with your details"
-  exit 1
+[[ -z "$VPS_HOST" ]] && die "VPS_HOST unset (arg, env, or .deploy.env)"
+
+#######################################
+# Preflight
+#######################################
+command -v rsync >/dev/null || die "rsync missing"
+command -v ssh   >/dev/null || die "ssh missing"
+
+log "Deploy target: ${BOLD}$VPS_HOST:$VPS_PATH${RESET}"
+
+#######################################
+# Remote prep (single SSH)
+#######################################
+log "Preparing remote directories"
+ssh "$VPS_HOST" "mkdir -p $VPS_PATH/data" >/dev/null
+ok "Remote ready"
+
+#######################################
+# Rsync payload
+#######################################
+log "Syncing filesystem delta"
+
+rsync -az --delete \
+  --exclude={node_modules,.git,data,.env,.deploy.env,*.log,.DS_Store} \
+  ./ "$VPS_HOST:$VPS_PATH/"
+
+ok "Code synced"
+
+#######################################
+# Secrets & mutable state
+#######################################
+if [[ -f .env ]]; then
+  rsync -az .env "$VPS_HOST:$VPS_PATH/" && ok ".env synced"
+else
+  warn ".env missing (skipped)"
 fi
 
-echo "🚀 Deploying to $VPS_HOST:$VPS_PATH"
-
-# Create directory on VPS
-ssh "$VPS_HOST" "mkdir -p $VPS_PATH/data"
-
-# Copy all required files
-echo "📦 Copying files..."
-scp Dockerfile docker-compose.yml .dockerignore "$VPS_HOST:$VPS_PATH/" 2>/dev/null || true
-scp package.json bun.lock tsconfig.json "$VPS_HOST:$VPS_PATH/" 2>/dev/null || true
-scp -r src "$VPS_HOST:$VPS_PATH/" 2>/dev/null || true
-scp env.example "$VPS_HOST:$VPS_PATH/" 2>/dev/null || true
-
-# Copy .env if it exists (optional)
-if [ -f .env ]; then
-  scp .env "$VPS_HOST:$VPS_PATH/" 2>/dev/null && echo "  ✓ Copied .env" || echo "  ⚠ Failed to copy .env"
+if [[ -f data/tokens.json ]]; then
+  rsync -az data/tokens.json "$VPS_HOST:$VPS_PATH/data/" && ok "tokens.json synced"
 fi
 
-# Copy tokens.json if it exists (optional)
-if [ -f data/tokens.json ]; then
-  ssh "$VPS_HOST" "mkdir -p $VPS_PATH/data" 2>/dev/null || true
-  scp data/tokens.json "$VPS_HOST:$VPS_PATH/data/" 2>/dev/null && echo "  ✓ Copied tokens.json" || echo "  ⚠ Failed to copy tokens.json"
-fi
+#######################################
+# Build + restart (single SSH session)
+#######################################
+log "Rebuilding & restarting containers"
 
-# Rebuild and restart on VPS
-echo ""
-echo "🔨 Rebuilding Docker image..."
-ssh "$VPS_HOST" "cd $VPS_PATH && docker compose build"
+ssh "$VPS_HOST" <<EOF
+  set -e
+  cd $VPS_PATH
+  docker compose -f docker-compose.yml build
+  docker compose -f docker-compose.yml up -d
+EOF
 
-echo ""
-echo "🔄 Restarting container..."
-ssh "$VPS_HOST" "cd $VPS_PATH && docker compose up -d"
+ok "Containers live"
 
-echo ""
-echo "✅ Deployment complete!"
-echo ""
-echo "📋 Container status:"
-ssh "$VPS_HOST" "cd $VPS_PATH && docker compose ps"
+#######################################
+# Postflight
+#######################################
+echo
+log "Container status"
+ssh "$VPS_HOST" "cd $VPS_PATH && docker compose -f docker-compose.yml ps"
 
-echo ""
-echo "📜 Recent logs:"
-ssh "$VPS_HOST" "cd $VPS_PATH && docker compose logs --tail=10 banking"
+echo
+log "Recent logs"
+ssh "$VPS_HOST" "cd $VPS_PATH && docker compose -f docker-compose.yml logs --tail=10 banking"
 
-echo ""
-echo "💡 View live logs: ssh $VPS_HOST 'cd $VPS_PATH && docker compose logs -f'"
+echo
+ok "Deployment complete"
+echo "${DIM}Live logs:${RESET} ssh $VPS_HOST \"cd $VPS_PATH && docker compose -f docker-compose.yml logs -f\""
