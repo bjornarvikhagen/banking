@@ -7,16 +7,25 @@ const env = <T extends string[]>(...keys: T) => {
   return vals as { [K in keyof T]: string };
 };
 
-const [CLIENT_ID, CLIENT_SECRET, TOKEN_URL, API_BASE] = env(
+const [
+  CLIENT_ID,
+  CLIENT_SECRET,
+  TOKEN_URL,
+  API_BASE,
+  FROM_ACCOUNT,
+  TO_ACCOUNT,
+] = env(
   "CLIENT_ID",
   "CLIENT_SECRET",
   "SPAREBANK1_TOKEN_URL",
-  "SPAREBANK1_API_BASE"
+  "SPAREBANK1_API_BASE",
+  "FROM_ACCOUNT",
+  "TO_ACCOUNT"
 );
 
 const CONFIG = {
-  fromAccount: "42135132033",
-  toAccount: "42125167564",
+  fromAccount: FROM_ACCOUNT,
+  toAccount: TO_ACCOUNT,
   message: "Daily budget transfer",
   runHour: 9,
 } as const;

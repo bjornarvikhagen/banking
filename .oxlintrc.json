@@ -1,0 +1,55 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": {
+    "browser": true,
+    "node": true
+  },
+  "globals": {
+    "console": "readonly",
+    "process": "readonly",
+    "setTimeout": "readonly",
+    "fetch": "readonly",
+    "Headers": "readonly",
+    "URLSearchParams": "readonly"
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "restriction": "error",
+    "style": "error",
+    "perf": "error",
+    "pedantic": "error",
+    "nursery": "error"
+  },
+  "rules": {
+    "eslint/no-unused-vars": "error",
+    "eslint/eqeqeq": ["error", "always"],
+    "eslint/no-implicit-globals": "error",
+    "eslint/no-implied-eval": "error",
+    "eslint/no-return-await": "error",
+    "eslint/no-shadow": "error",
+    "eslint/no-var": "error",
+    "eslint/prefer-const": "error",
+    "eslint/strict": ["error", "global"],
+    "eslint/no-console": "off",
+    "eslint/no-magic-numbers": "error",
+    "eslint/id-length": "error",
+    "eslint/sort-keys": "error",
+    "eslint/func-style": "error",
+    "eslint/curly": ["error", "all"],
+    "eslint/require-await": "error",
+    "eslint/class-methods-use-this": "error",
+    "oxc/no-async-await": "error",
+    "oxc/no-optional-chaining": "error",
+    "oxc/no-rest-spread-properties": "error",
+    "typescript-eslint/consistent-type-definitions": ["error", "interface"],
+    "typescript-eslint/explicit-function-return-type": "error",
+    "typescript-eslint/explicit-module-boundary-types": "error",
+    "eslint-plugin-unicorn/prefer-string-replace-all": "error",
+    "eslint-plugin-unicorn/explicit-length-check": "error",
+    "eslint-plugin-unicorn/catch-error-name": "error",
+    "eslint-plugin-unicorn/no-null": "error",
+    "eslint-plugin-unicorn/text-encoding-identifier-case": "error",
+    "eslint-plugin-unicorn/no-unreadable-array-destructuring": "error"
+  }
+}

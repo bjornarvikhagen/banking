@@ -3,8 +3,13 @@
   "module": "src/index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "lint": "oxlint src/",
+    "lint:fix": "oxlint --fix src/"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "oxlint": "^1.39.0"
   },
   "peerDependencies": {
     "typescript": "^5"
