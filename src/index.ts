@@ -79,7 +79,7 @@ const schedule = (client: BankingClient): void => {
   }, msUntilHour(CONFIG.runHour));
 };
 
-const [, , mode] = process.argv;
+const [_executable, _script, mode] = process.argv;
 if (mode === "once") {
   await runTransfer(await createClient());
 } else if (mode === "schedule") {
