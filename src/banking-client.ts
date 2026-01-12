@@ -17,10 +17,16 @@ interface TransferResult {
 }
 
 export class BankingClient {
-  private oauth: OAuthClient;
+  #oauth: OAuthClient;
+  #cfg: {
+    clientId: string;
+    clientSecret: string;
+    tokenUrl: string;
+    apiBase: string;
+  };
 
   constructor(
-    private cfg: {
+    cfg: {
       clientId: string;
       clientSecret: string;
       tokenUrl: string;
@@ -28,17 +34,18 @@ export class BankingClient {
     },
     tokenPath: string
   ) {
-    this.oauth = new OAuthClient(cfg, tokenPath);
+    this.#cfg = cfg;
+    this.#oauth = new OAuthClient(cfg, tokenPath);
   }
 
   initializeTokens = (
     ...args: Parameters<OAuthClient["initializeTokens"]>
-  ): Promise<void> => this.oauth.initializeTokens(...args);
+  ): Promise<void> => this.#oauth.initializeTokens(...args);
 
-  hasTokens = (): Promise<boolean> => this.oauth.hasTokens();
+  hasTokens = (): Promise<boolean> => this.#oauth.hasTokens();
 
-  private async api<T>(path: string, body: object): Promise<T> {
-    const res = await this.oauth.fetch(`${this.cfg.apiBase}${path}`, {
+  #api = async <T>(path: string, body: object): Promise<T> => {
+    const res = await this.#oauth.fetch(`${this.#cfg.apiBase}${path}`, {
       method: "POST",
       headers: { Accept: CONTENT_TYPE, "Content-Type": CONTENT_TYPE },
       body: JSON.stringify(body),
@@ -51,20 +58,20 @@ export class BankingClient {
       throw new Error(msg ?? `API error: ${res.status}`);
     }
     return json as T;
-  }
+  };
 
-  private clean = (acct: string): string => acct.replaceAll(/\s/g, "");
+  #clean = (acct: string): string => acct.replaceAll(/\s/g, "");
 
   getBalance = (account: string): Promise<number> =>
-    this.api<{ accountBalance: number }>("/personal/banking/accounts/balance", {
-      accountNumber: this.clean(account),
+    this.#api<{ accountBalance: number }>("/personal/banking/accounts/balance", {
+      accountNumber: this.#clean(account),
     }).then((response) => response.accountBalance);
 
   transfer = (req: TransferRequest): Promise<TransferResult> =>
-    this.api<TransferResult>("/personal/banking/transfer/debit", {
+    this.#api<TransferResult>("/personal/banking/transfer/debit", {
       ...req,
-      fromAccount: this.clean(req.fromAccount),
-      toAccount: this.clean(req.toAccount),
+      fromAccount: this.#clean(req.fromAccount),
+      toAccount: this.#clean(req.toAccount),
     });
 
   async executeDailyTransfer(cfg: {

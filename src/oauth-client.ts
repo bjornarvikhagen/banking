@@ -13,36 +13,41 @@ interface OAuthConfig {
 }
 
 export class OAuthClient {
-  private refreshPromise: Promise<void> | null = null;
+  // eslint-disable-next-line no-unused-private-class-members
+  #refreshPromise: Promise<void> | null = null;
+  #config: OAuthConfig;
+  #tokenPath: string;
 
-  constructor(private config: OAuthConfig, private tokenPath: string) {}
-
-  private async getTokens(): Promise<TokenData | null> {
-    return readFile(this.tokenPath, "utf-8")
-      .then((str) => JSON.parse(str) as TokenData)
-      .catch(() => null);
+  constructor(config: OAuthConfig, tokenPath: string) {
+    this.#config = config;
+    this.#tokenPath = tokenPath;
   }
 
-  private saveTokens = (data: TokenData): Promise<void> =>
-    writeFile(this.tokenPath, JSON.stringify(data, null, 2));
+  #getTokens = async (): Promise<TokenData | null> =>
+    readFile(this.#tokenPath, "utf-8")
+      .then((str) => JSON.parse(str) as TokenData)
+      .catch(() => null);
+
+  #saveTokens = (data: TokenData): Promise<void> =>
+    writeFile(this.#tokenPath, JSON.stringify(data, null, 2));
 
   async initializeTokens(
     access: string,
     refresh: string,
     expiresIn: number
   ): Promise<void> {
-    await this.saveTokens({
+    await this.#saveTokens({
       access_token: access,
       refresh_token: refresh,
       expires_at: Date.now() + expiresIn * 1000,
     });
   }
 
-  hasTokens = async (): Promise<boolean> => (await this.getTokens()) !== null;
+  hasTokens = async (): Promise<boolean> => (await this.#getTokens()) !== null;
 
   async fetch(input: string | URL, init?: RequestInit): Promise<Response> {
     const doFetch = async (): Promise<Response> => {
-      const tokens = await this.getTokens();
+      const tokens = await this.#getTokens();
       if (!tokens) {
         throw new Error("No tokens available");
       }
@@ -51,44 +56,44 @@ export class OAuthClient {
       return fetch(input, { ...init, headers });
     };
 
-    await this.ensureFresh();
+    await this.#ensureFresh();
     const res = await doFetch();
     if (res.status === 401) {
-      await this.refresh();
+      await this.#refresh();
       return doFetch();
     }
     return res;
   }
 
-  private async ensureFresh(): Promise<void> {
-    const tokens = await this.getTokens();
+  #ensureFresh = async (): Promise<void> => {
+    const tokens = await this.#getTokens();
     if (!tokens) {
       throw new Error("No tokens in storage");
     }
     if (tokens.expires_at - Date.now() < 60_000) {
-      await this.refresh();
+      await this.#refresh();
     }
-  }
+  };
 
-  private async refresh(): Promise<void> {
-    this.refreshPromise ??= this.doRefresh().finally(
-      () => (this.refreshPromise = null)
+  #refresh = async (): Promise<void> => {
+    this.#refreshPromise ??= this.#doRefresh().finally(
+      () => (this.#refreshPromise = null)
     );
-    await this.refreshPromise;
-  }
+    await this.#refreshPromise;
+  };
 
-  private async doRefresh(): Promise<void> {
-    const tokens = await this.getTokens();
+  #doRefresh = async (): Promise<void> => {
+    const tokens = await this.#getTokens();
     if (!tokens) {
       throw new Error("No refresh token");
     }
 
-    const res = await fetch(this.config.tokenUrl, {
+    const res = await fetch(this.#config.tokenUrl, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
+        client_id: this.#config.clientId,
+        client_secret: this.#config.clientSecret,
         grant_type: "refresh_token",
         refresh_token: tokens.refresh_token,
       }),
@@ -103,9 +108,9 @@ export class OAuthClient {
       refresh_token: string;
       expires_in: number;
     };
-    await this.saveTokens({
+    await this.#saveTokens({
       ...data,
       expires_at: Date.now() + data.expires_in * 1000,
     });
-  }
+  };
 }

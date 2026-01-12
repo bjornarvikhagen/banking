@@ -26,12 +26,24 @@ This spreads your monthly budget evenly across the remaining days.
    cp env.example .env
    ```
 
-   Fill in your SpareBank 1 OAuth credentials.
+   Fill in your SpareBank 1 OAuth credentials:
 
-3. **Edit account numbers in `src/index.ts`:**
-   ```typescript
-   const FROM_ACCOUNT = "42125167564"; // Your source account
-   const TO_ACCOUNT = "42145570276"; // Your destination account
+   - `CLIENT_ID`
+   - `CLIENT_SECRET`
+   - `SPAREBANK1_TOKEN_URL`
+   - `SPAREBANK1_API_BASE`
+   - `FROM_ACCOUNT` - Source account number
+   - `TO_ACCOUNT` - Destination account number
+   - `ACCESS_TOKEN` & `REFRESH_TOKEN` (only needed for initial setup)
+
+3. **Run:**
+
+   ```bash
+   # Test once
+   bun run src/index.ts once
+
+   # Start daily scheduler
+   bun run src/index.ts schedule
    ```
 
 ## Usage
@@ -65,20 +77,56 @@ And so on until the last day of the month.
 ```
 src/
   oauth-client.ts       # OAuth 2.0 with auto-refresh
-  file-token-storage.ts # Token persistence
-  accounts.ts           # Get account balance
-  transfers.ts          # Create transfers
-  date-utils.ts         # Calculate remaining days
-  index.ts              # Main scheduler
+  banking-client.ts     # Banking API client (balance, transfers)
+  index.ts              # Main scheduler & entry point
 data/
   tokens.json           # Persisted tokens (gitignored)
 ```
+
+### Components
+
+- **OAuthClient**: Handles OAuth 2.0 authentication with automatic token refresh
+
+  - Proactive refresh when within 60s of expiry
+  - Retry on 401 responses
+  - Concurrency-safe (single refresh at a time)
+  - File-based token persistence
+
+- **BankingClient**: Wraps SpareBank 1 API calls
+
+  - Account balance fetching
+  - Transfer execution
+  - Daily transfer calculation (balance ÷ remaining days)
+
+- **index.ts**: Main entry point
+  - Environment variable validation
+  - Client initialization
+  - Transfer scheduling logic
+
+## Development
+
+### Lint
+
+```bash
+bun run lint
+```
+
+### Fix linting issues
+
+```bash
+bun run lint:fix
+```
+
+## Token Management
 
 Token management is fully automatic:
 
 - Proactive refresh when within 60s of expiry
 - Retry on 401 responses
 - Concurrency-safe (single refresh at a time)
+- Tokens persisted to `data/tokens.json`
+
+On first run, if no tokens exist, you'll need to provide `ACCESS_TOKEN` and `REFRESH_TOKEN` in your `.env` file. After that, tokens are automatically refreshed.
 
 ---
 
